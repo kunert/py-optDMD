@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 
 
 def backslash(A,B):
+    #I initially replaced MATLAB's backslash command with a single call to np.linalg.lstsq
+    #which should be mostly equivalent most of the time. However, giving the 
     x=[]
     for k in range(B.shape[1]):
         b=B[:,k][:,None]
@@ -85,8 +87,6 @@ class varpro_opts(object):
     
 def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
     
-        
-    
     if opts==[]:
         opts=varpro_opts()
     lambda0,maxlam,lamup,lamdown,ifmarq,maxiter,tol,eps_stall,iffulljac=opts.unpack()
@@ -111,27 +111,7 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
     S=S[:irank,:irank]
     V=V[:,:irank].T
 
-    
-    
-    
-    #t1=np.random.randn(*phimat.shape)
-    #t2=np.random.randn(*y.shape)
-    #bt=np.linalg.lstsq(t1,t2)[0]
-    #  
-    
-    
-    
-    
-    #------------------------------------------------------------------------------------------------------<<<<<<<<<<<
-    #KNOWN BUG:
-    #for some reason, if 'r' is chosen too large, kernel will suddenly die upon attempting lstsq solution
-    #pdb.set_trace()
-    #print 'foo'
-    #sys.stdout.flush()
-    #b=np.linalg.lstsq(phimat,y)[0]
     b=backslash(phimat,y)
-    #print 'bar'
-    #sys.stdout.flush()
     
     res=y-phimat.dot(b)
     errlast=np.linalg.norm(res,'fro')/res_scale
