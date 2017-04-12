@@ -7,6 +7,8 @@ Created on Tue Apr 11 12:49:42 2017
 
 import numpy as np
 from variableProj import *
+import sys
+
 
 ############ NOW BEGIN PRELIMINARY OPTDMD CODE ##################    
 def optdmd(X,t,r,imode):
@@ -54,7 +56,7 @@ def optdmd(X,t,r,imode):
     dphi=lambda a,t,i:varpro2dexpfun(a,t,i)
     alpha_init=alpha_init
     opts=varpro_opts()
-    
+
     #djaca,djacb,dphitemp,U,b,alpha,t=varpro2(y,t,phi,dphi,m,n,iss,ia,alpha_init,opts)
     w,e,niter,err,imode,alphas=varpro2(y,t,phi,dphi,m,n,iss,ia,alpha_init,opts)
     
@@ -100,6 +102,6 @@ if __name__=='__main__':
     sigma=0
     xdata=xclean+sigma*np.random.randn(*xclean.shape) 
     
-    r=3
-    
+    r=11
+    imode=0
     w,e,b=optdmd(xdata,ts,r,imode)

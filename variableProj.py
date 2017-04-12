@@ -8,11 +8,25 @@ import numpy as np
 import scipy as sci
 from scipy.sparse import csc_matrix
 import copy
+import sys,pdb
+import matplotlib.pyplot as plt
 
-def varpro2expfun(alpha,t):
+
+def backslash(A,B):
+    x=[]
+    for k in range(B.shape[1]):
+        b=B[:,k][:,None]
+        x.append(np.linalg.lstsq(A,b)[0])
+    return np.hstack(x)
+
+def varpro2expfun(alphaf,tf):
+    alpha=copy.copy(alphaf)
+    t=copy.copy(tf)
     return np.exp(np.reshape(t,(-1,1)).dot(np.reshape(alpha,(1,-1))))
 
-def varpro2dexpfun(alpha,t,i):
+def varpro2dexpfun(alphaf,tf,i):
+    alpha=copy.copy(alphaf)
+    t=copy.copy(tf)
     m=t.size
     n=alpha.size
     if (i<0)|(i>=n):
@@ -38,7 +52,7 @@ def varpro2_solve_special(R,D,b):
         A[ind,i:]+=-(beta*u).dot((u.conj().T.dot(A[ind,i:])))
         b[ind]+=-(beta*u).dot(u.conj().T.dot(b[ind]))
     RA=np.triu(A)[:n,:n]
-    return np.linalg.lstsq(RA,b[:n])[0]
+    return backslash(RA,b[:n])
     
 def checkinputrange(xname,xval,xmin,xmax):
     if xval>xmax:
@@ -70,6 +84,9 @@ class varpro_opts(object):
     
     
 def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
+    
+        
+    
     if opts==[]:
         opts=varpro_opts()
     lambda0,maxlam,lamup,lamdown,ifmarq,maxiter,tol,eps_stall,iffulljac=opts.unpack()
@@ -82,17 +99,44 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
     res_scale=np.linalg.norm(y,'fro')
     scales=np.zeros((ia,))
     
+      
+    
     phimat=phi(alpha,t)
     [U,S,V]=np.linalg.svd(phimat,full_matrices=False)
+    
     S=np.diag(S);sd=np.diag(S)
     tolrank=m*np.finfo(float).eps
-    irank=np.sum(sd>(tolrank*sd[0]))
+    irank=np.sum(sd>(tolrank*sd[0]))    
     U=U[:,:irank]
     S=S[:irank,:irank]
     V=V[:,:irank].T
-    b=np.linalg.lstsq(phimat,y)[0]
+
+    
+    
+    
+    #t1=np.random.randn(*phimat.shape)
+    #t2=np.random.randn(*y.shape)
+    #bt=np.linalg.lstsq(t1,t2)[0]
+    #  
+    
+    
+    
+    
+    #------------------------------------------------------------------------------------------------------<<<<<<<<<<<
+    #KNOWN BUG:
+    #for some reason, if 'r' is chosen too large, kernel will suddenly die upon attempting lstsq solution
+    #pdb.set_trace()
+    #print 'foo'
+    #sys.stdout.flush()
+    #b=np.linalg.lstsq(phimat,y)[0]
+    b=backslash(phimat,y)
+    #print 'bar'
+    #sys.stdout.flush()
+    
     res=y-phimat.dot(b)
     errlast=np.linalg.norm(res,'fro')/res_scale
+    
+        
     
     imode=0
     
@@ -103,7 +147,7 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
             djaca=(dphitemp-csc_matrix(U*csc_matrix(U.T.conj()*dphitemp))).dot(b)
             if iffulljac==1:
                 #use full expression for jacobian
-                djacb=U.dot(np.linalg.lstsq(S,V.T.conj().dot(dphitemp.T.conj().dot(res)))[0])
+                djacb=U.dot(backslash(S,V.T.conj().dot(dphitemp.T.conj().dot(res))))
                 djacmat[:,j]=-(djaca.ravel(order='F')+djacb.ravel(order='F'))
             else:
                 djacmat[:,j]=-djaca.ravel()
@@ -131,7 +175,7 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
         alpha0=alpha.ravel()-delta0.ravel()
         
         phimat=phi(alpha0,t)
-        b0=np.linalg.lstsq(phimat,y)[0]
+        b0=backslash(phimat,y)
         res0=y-phimat.dot(b0)
         err0=np.linalg.norm(res0,'fro')/res_scale
             
@@ -145,7 +189,7 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
             
             alpha1=alpha.ravel()-delta1.ravel()
             phimat=phi(alpha1,t)
-            b1=np.linalg.lstsq(phimat,y)[0]
+            b1=backslash(phimat,y)
             res1=y-phimat.dot(b1)
             err1=np.linalg.norm(res1,'fro')/res_scale
             
@@ -163,6 +207,7 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
         else:
             #if not, increase lambda until something works
             #this makes the algorithm more like gradient descent
+            #--------------------SOMETHING IS GETTING MESSED UP IN THIS ELSE STATEMENT PROBABLY...
             for j in range(maxlam):
                 lambda0=lambda0*lamup
                 delta0=varpro2_solve_special(rjac,lambda0*np.diag(scalespvt),rhs)  
@@ -170,17 +215,19 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
                 
                 alpha0=alpha.ravel()-delta0.ravel()
                 phimat=phi(alpha0,t)
-                b0=np.linalg.lstsq(phimat,y)[0]
+                b0=backslash(phimat,y)
                 res0=y-phimat.dot(b0)
                 err0=np.linalg.norm(res0,'fro')/res_scale
                 
                 if err0<errlast:
+                    #print 'HERE' #-- triggered on both
                     break
             if err0<errlast:
+                #print 'HERE'
                 alpha=copy.copy(alpha0)
                 errlast=copy.copy(err0)
                 b=copy.copy(b0)
-                res=copy.copy(b0)
+                res=copy.copy(res0)
             else:
                 #no appropriate step length found
                 niter=itern
@@ -201,7 +248,6 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
             imode=8
             print 'stall detected: residual reduced by less than {:} \n times residual at previous step. \n iteration {:} \n current residual {:}'.format(eps_stall,itern,errlast)
             return b,alpha,niter,err,imode,alphas
-        
         phimat=phi(alpha,t)
         [U,S,V]=np.linalg.svd(phimat,full_matrices=False)
         S=np.diag(S);sd=np.diag(S)
@@ -210,6 +256,7 @@ def varpro2(y,t,phi=[],dphi=[],m=[],n=[],iss=[],ia=[],alpha_init=[],opts=[]):
         U=U[:,:irank]
         S=S[:irank,:irank]
         V=V[:,:irank].T
+        
     #only get here if failed to meet tolerance in maxiter steps
     niter=maxiter
     imode=1
