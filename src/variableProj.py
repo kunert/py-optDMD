@@ -27,7 +27,7 @@ def varpro2dexpfun(alphaf, tf, i):
     m = t.size
     n = alpha.size
     if (i < 0) | (i >= n):
-        raise Exception('varpro2dexpfun: i outside of index range for alpha')
+        raise ValueError('varpro2dexpfun: i outside of index range for alpha')
     A = csc_matrix((m, n), dtype=complex)
     ttemp = np.reshape(t, (m, 1))
     A[:, i] = ttemp * np.exp(alpha[i] * ttemp)
@@ -40,7 +40,7 @@ def varpro2_solve_special(R, D, b):
     m, n = R.shape
     ma, na = A.shape
     if (ma != len(b)) | (ma != (m + n)) | (na != n):
-        raise Exception('Something Went Wrong: Input matrix dimensions inconsistent')
+        raise ValueError('Input matrix dimensions inconsistent')
     for i in range(n):
         ind = np.array([i] + [m + k for k in range(i + 1)])
         u = A[ind, i][:, None]
@@ -104,10 +104,14 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
     err = np.zeros((maxiter,))
     res_scale = np.linalg.norm(y, 'fro')
     scales = np.zeros((ia,))
+    gamma = np.zeros((ia,))
 
     phimat = phi(alpha, t)
     [U, S, V] = np.linalg.svd(phimat, full_matrices=False)
 
+    # @ToDo: Resolve if two diag calls are required.
+    # Numpy for matlab users suggests that S is equivalent in both matlab and numpy
+    # and that therefor the double np.diag() call may be erroneous.
     S = np.diag(S)
     sd = np.diag(S)
     tolrank = m * np.finfo(float).eps
@@ -119,8 +123,14 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
     b = backslash(phimat, y)
 
     res = y - phimat.dot(b)
-    errlast = np.linalg.norm(res, 'fro') / res_scale
-
+    # This expression differs from the original matlab code.
+    # errlast = np.linalg.norm(res, 'fro') / res_scale
+    # Gamma is a zeros matrix when not using the Tikhonov regularization so errlast
+    # should just be this expression.
+    errlast = 0.5 * (
+            np.linalg.norm(res, 'fro') ** 2
+            + np.linalg.norm(np.dot(gamma, alpha), 2) ** 2
+    )
     imode = 0
 
     for itern in range(maxiter):
@@ -139,9 +149,9 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
                 scales[j] = np.minimum(np.linalg.norm(djacmat[:, j]), 1.0)
                 scales[j] = np.maximum(scales[j], 1.0e-6)
 
-        # loop to detemine lambda (lambda gives the levenberg part)
+        # loop to determine lambda (lambda gives the levenberg part)
         # pre-compute components which don't depend on step-size (lambda)
-        # get pivots and lapack-style qr for jacobian matrix
+        # get pivots and lapack-style qr for Jacobian matrix
 
         _, _, _, work, _ = sci.linalg.lapack.zgeqp3(djacmat)
         djacout, jpvt, tau, _, _ = sci.linalg.lapack.zgeqp3(djacmat, work)
@@ -159,50 +169,103 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
         delta0 = varpro2_solve_special(rjac, lambda0 * np.diag(scalespvt), rhs)
         delta0 = delta0[jpvt - 1]
 
+        # @ToDo: This is not the right statement for updating alpha. Fix.
+        # Original matlab code:
+        # if (ifproxfun == 1)
+        #     alpha0 = proxfun(alpha + delta0);
+        #     delta0 = alpha0 - alpha; % update
+        #     delta0
+        # else
+        #     alpha0 = alpha + delta0;
+        #
+        # end
         alpha0 = alpha.ravel() - delta0.ravel()
 
         phimat = phi(alpha0, t)
+        # Maybe replace with the built-in backslash equivalent function.
         b0 = backslash(phimat, y)
         res0 = y - phimat.dot(b0)
-        err0 = np.linalg.norm(res0, 'fro') / res_scale
+        # Return to using the original matlab code expression.
+        # The below commented expression is from the python conversion.
+        # err0 = np.linalg.norm(res0, 'fro') / res_scale
+        err0 = 0.5 * (
+            np.linalg.norm(res0, 'fro') ** 2
+            + np.linalg.norm(np.dot(gamma, alpha0), 2) ** 2
+        )
 
-        # check if this is an improvement
+        # @ToDo: These update lines are missing for lambda
+        # Update rule: check predicted improvement vs actual improvement
+        # Original matlab code:
+        # act_impr = errlast - err0;
+        # pred_impr = real(0.5 * delta0'*(g));
+        # impr_rat = act_impr / pred_impr;
+        actual_improvement = errlast - err0
+        predicted_improvement = np.real(0.5 * np.dot(delta0.conj().T, g))
+        improvement_ratio = actual_improvement / predicted_improvement
+
+        # @ToDo: Choosing lambda does not follow matlab logic. Recreate.
+        # If the residuals improved, update the values.
         if err0 < errlast:
-            # see if smaller lambda is better
-            lambda1 = lambda0 / lamdown
-            delta1 = varpro2_solve_special(rjac, lambda1 * np.diag(scalespvt), rhs)
-            delta1 = delta1[jpvt - 1]
+            # New version: rescale lambda based on actual vs predicted improvement
 
-            alpha1 = alpha.ravel() - delta1.ravel()
-            phimat = phi(alpha1, t)
-            b1 = backslash(phimat, y)
-            res1 = y - phimat.dot(b1)
-            err1 = np.linalg.norm(res1, 'fro') / res_scale
+            # Original matlab code
+            # lambda0 = lambda0 * max(1.0 / 3.0, 1 - (2 * impr_rat - 1) ^ 3);
+            # alpha = alpha0;
+            # errlast = err0;
+            # b = b0;
+            # res = res0;
+            lambda0 = lambda0 * np.max(
+                1.0 / 3.0,
+                1 - (2 * improvement_ratio - 1) ** 3)
+            alpha = alpha0
+            errlast = err0
+            b = b0
+            res = res0
 
-            if err1 < err0:
-                lambda0 = copy.copy(lambda1)
-                alpha = copy.copy(alpha1)
-                errlast = copy.copy(err1)
-                b = copy.copy(b1)
-                res = copy.copy(res1)
-            else:
-                alpha = copy.copy(alpha0)
-                errlast = copy.copy(err0)
-                b = copy.copy(b0)
-                res = copy.copy(res0)
+            # # see if smaller lambda is better
+            # lambda1 = lambda0 / lamdown
+            # delta1 = varpro2_solve_special(rjac, lambda1 * np.diag(scalespvt), rhs)
+            # delta1 = delta1[jpvt - 1]
+            #
+            # alpha1 = alpha.ravel() - delta1.ravel()
+            # phimat = phi(alpha1, t)
+            # b1 = backslash(phimat, y)
+            # res1 = y - phimat.dot(b1)
+            # err1 = np.linalg.norm(res1, 'fro') / res_scale
+            #
+            # if err1 < err0:
+            #     lambda0 = copy.copy(lambda1)
+            #     alpha = copy.copy(alpha1)
+            #     errlast = copy.copy(err1)
+            #     b = copy.copy(b1)
+            #     res = copy.copy(res1)
+            # else:
+            #     alpha = copy.copy(alpha0)
+            #     errlast = copy.copy(err0)
+            #     b = copy.copy(b0)
+            #     res = copy.copy(res0)
         else:
-            # if not, increase lambda until something works
-            # this makes the algorithm more like gradient descent
-            # SOMETHING IS GETTING MESSED UP IN THIS ELSE STATEMENT PROBABLY...
+            # If the residuals did not improve, increase lambda until something works.
+            # This makes the algorithm more like gradient descent
             for j in range(maxlam):
                 lambda0 = lambda0 * lamup
                 delta0 = varpro2_solve_special(rjac, lambda0 * np.diag(scalespvt), rhs)
                 delta0 = delta0[jpvt - 1]
 
+                # @ToDo: Fix alpha update statements to original matlab code.
+                # Original matlab code:
+                # alpha0 = alpha + delta0;
+                # if (ifproxfun == 1)
+                #     alpha0 = proxfun(alpha0);
+                #     delta0 = alpha0 - alpha;
+                # end
                 alpha0 = alpha.ravel() - delta0.ravel()
+
                 phimat = phi(alpha0, t)
                 b0 = backslash(phimat, y)
                 res0 = y - phimat.dot(b0)
+
+                # @ToDo: Fix err0 statement.
                 err0 = np.linalg.norm(res0, 'fro') / res_scale
 
                 if err0 < errlast:
@@ -215,7 +278,7 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
                 b = copy.copy(b0)
                 res = copy.copy(res0)
             else:
-                # no appropriate step length found
+                # No appropriate step length was found.
                 niter = itern
                 err[itern] = errlast
                 imode = 4
