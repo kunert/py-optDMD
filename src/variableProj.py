@@ -11,7 +11,7 @@ def backslash(A, B):
     x = []
     for k in range(B.shape[1]):
         b = B[:, k][:, None]
-        x.append(np.linalg.lstsq(A, b)[0])
+        x.append(np.linalg.lstsq(A, b, rcond=None)[0])
     return np.hstack(x)
 
 
@@ -92,7 +92,7 @@ class varpro_opts(object):
         return self.lambda0, self.maxlam, self.lamup, self.lamdown, self.ifmarq, self.maxiter, self.tol, self.eps_stall, self.iffulljac
 
 
-def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
+def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
     if opts is None:
         opts = varpro_opts()
     lambda0, maxlam, lamup, lamdown, ifmarq, maxiter, tol, eps_stall, iffulljac = opts.unpack()
@@ -101,17 +101,15 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
     alpha = alpha_init
     alphas = np.zeros((len(alpha), maxiter)).astype(complex)
     djacmat = np.zeros((m * iss, ia)).astype(complex)
+    rhstemp = np.zeros((m * iss, 1))
     err = np.zeros((maxiter,))
     res_scale = np.linalg.norm(y, 'fro')
     scales = np.zeros((ia,))
-    gamma = np.zeros((ia,))
+    gamma = np.zeros((ia, ia))
 
     phimat = phi(alpha, t)
     [U, S, V] = np.linalg.svd(phimat, full_matrices=False)
 
-    # @ToDo: Resolve if two diag calls are required.
-    # Numpy for matlab users suggests that S is equivalent in both matlab and numpy
-    # and that therefor the double np.diag() call may be erroneous.
     S = np.diag(S)
     sd = np.diag(S)
     tolrank = m * np.finfo(float).eps
@@ -120,7 +118,8 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
     S = S[:irank, :irank]
     V = V[:, :irank].T
 
-    b = backslash(phimat, y)
+    # b_old = backslash(phimat, y)
+    b, _, _, _ = np.linalg.lstsq(phimat, y, rcond=None)
 
     res = y - phimat.dot(b)
     # This expression differs from the original matlab code.
@@ -153,6 +152,11 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
         # pre-compute components which don't depend on step-size (lambda)
         # get pivots and lapack-style qr for Jacobian matrix
 
+        # rhstemp[:m * iss] = res
+        rhstemp = res.ravel('F')
+
+        # This whole section is a mess. Intermediate terms do not correspond to the
+        # matlab equivalents.
         _, _, _, work, _ = sci.linalg.lapack.zgeqp3(djacmat)
         djacout, jpvt, tau, _, _ = sci.linalg.lapack.zgeqp3(djacmat, work)
         rjac = np.triu(djacout)
@@ -166,11 +170,12 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
         scalespvt = scales[jpvt - 1]
         rhs = np.concatenate((rhstop, np.zeros((ia, 1)).astype(complex)), 0)
 
+        # Delta0 aligns again with the matlab code.
         delta0 = varpro2_solve_special(rjac, lambda0 * np.diag(scalespvt), rhs)
         delta0 = delta0[jpvt - 1]
 
-        # @ToDo: This is not the right statement for updating alpha. Fix.
         # Original matlab code:
+        # When not providing linear constraints, `ifproxfun == 0`.
         # if (ifproxfun == 1)
         #     alpha0 = proxfun(alpha + delta0);
         #     delta0 = alpha0 - alpha; % update
@@ -179,31 +184,31 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
         #     alpha0 = alpha + delta0;
         #
         # end
-        alpha0 = alpha.ravel() - delta0.ravel()
+        # The sign of delta0 is flipped relative to the matlab code.
+        alpha0 = alpha.ravel('F') - delta0.ravel('F')
 
         phimat = phi(alpha0, t)
-        # Maybe replace with the built-in backslash equivalent function.
-        b0 = backslash(phimat, y)
+        # Replaced with the built-in backslash equivalent function.
+        # b0_old = backslash(phimat, y)
+        b0, _, _, _ = np.linalg.lstsq(phimat, y, rcond=None)
         res0 = y - phimat.dot(b0)
         # Return to using the original matlab code expression.
-        # The below commented expression is from the python conversion.
+        # The below commented expression is from the original python conversion.
         # err0 = np.linalg.norm(res0, 'fro') / res_scale
         err0 = 0.5 * (
             np.linalg.norm(res0, 'fro') ** 2
             + np.linalg.norm(np.dot(gamma, alpha0), 2) ** 2
         )
 
-        # @ToDo: These update lines are missing for lambda
-        # Update rule: check predicted improvement vs actual improvement
         # Original matlab code:
         # act_impr = errlast - err0;
         # pred_impr = real(0.5 * delta0'*(g));
         # impr_rat = act_impr / pred_impr;
+        g = np.dot(djacmat.conj().T, rhstemp)
         actual_improvement = errlast - err0
         predicted_improvement = np.real(0.5 * np.dot(delta0.conj().T, g))
         improvement_ratio = actual_improvement / predicted_improvement
 
-        # @ToDo: Choosing lambda does not follow matlab logic. Recreate.
         # If the residuals improved, update the values.
         if err0 < errlast:
             # New version: rescale lambda based on actual vs predicted improvement
@@ -215,8 +220,8 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
             # b = b0;
             # res = res0;
             lambda0 = lambda0 * np.max(
-                1.0 / 3.0,
-                1 - (2 * improvement_ratio - 1) ** 3)
+                [1.0 / 3.0, 1 - (2 * improvement_ratio - 1) ** 3]
+            )
             alpha = alpha0
             errlast = err0
             b = b0
@@ -252,25 +257,29 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
                 delta0 = varpro2_solve_special(rjac, lambda0 * np.diag(scalespvt), rhs)
                 delta0 = delta0[jpvt - 1]
 
-                # @ToDo: Fix alpha update statements to original matlab code.
                 # Original matlab code:
                 # alpha0 = alpha + delta0;
                 # if (ifproxfun == 1)
                 #     alpha0 = proxfun(alpha0);
                 #     delta0 = alpha0 - alpha;
                 # end
+                # The sign of delta0 is flipped relative to the reference matlab code.
                 alpha0 = alpha.ravel() - delta0.ravel()
 
                 phimat = phi(alpha0, t)
                 b0 = backslash(phimat, y)
                 res0 = y - phimat.dot(b0)
 
-                # @ToDo: Fix err0 statement.
-                err0 = np.linalg.norm(res0, 'fro') / res_scale
+                # err0 = np.linalg.norm(res0, 'fro') / res_scale
+                err0 = 0.5 * (
+                        np.linalg.norm(res0, 'fro') ** 2
+                        + np.linalg.norm(np.dot(gamma, alpha0), 2) ** 2
+                )
 
                 if err0 < errlast:
                     # print 'HERE' #-- triggered on both
                     break
+
             if err0 < errlast:
                 # print 'HERE'
                 alpha = copy.copy(alpha0)
@@ -292,6 +301,9 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
         alphas[:, itern] = alpha
         err[itern] = errlast
 
+        if verbose:
+            print('step {} err {} lambda {}'.format(itern, errlast, lambda0))
+
         # The tolerance was met and the results are passed back out.
         if errlast < tol:
             niter = itern
@@ -299,13 +311,16 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
 
         # Error handling for not converging.
         if itern > 0:
-            niter = itern
-            imode = 8
-            stall_error_string = (
-                'Stall detected: residual reduced by less than {:} \n times residual at'
-                'previous step. \n iteration {:} \n current residual {:}')
-            print(stall_error_string.format(eps_stall, itern, errlast))
-            return b, alpha, niter, err, imode, alphas
+            if err[itern - 1] - err[itern] < eps_stall * err[itern - 1]:
+                niter = itern
+                imode = 8
+                stall_error_string = (
+                    'Stall detected: residual reduced by less than {:} \n times '
+                    'residual at previous step.'
+                    '\niteration: {:}\ncurrent residual: {:.5f}')
+                print(stall_error_string.format(eps_stall, itern, errlast))
+                return b, alpha, niter, err, imode, alphas
+
         phimat = phi(alpha, t)
         [U, S, V] = np.linalg.svd(phimat, full_matrices=False)
         S = np.diag(S)
@@ -323,6 +338,3 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None):
         'failed to reach tolerance after maxiter={:} iterations \n current residual {:}'
     )
     print(maxiter_tolerance_error_string.format(maxiter, errlast))
-
-if __name__=='__main__':
-   pass

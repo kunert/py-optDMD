@@ -1,16 +1,9 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Apr 11 12:49:42 2017
-
-@author: JamesMichael
-"""
-
 import numpy as np
 from .variableProj import *
 import sys
 
 
-def optdmd(X, t, r, imode, alpha_init=None):
+def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
     # Pre-compute U.
     u, _, _ = np.linalg.svd(X, full_matrices=False)
 
@@ -38,8 +31,6 @@ def optdmd(X, t, r, imode, alpha_init=None):
         atilde = u1.conj().T.dot(dx.dot(v1.dot(s1inv)))
         alpha_init = np.linalg.eig(atilde)[0]
 
-    # @ToDo: imode == 2 using the projected POD modes.
-
     # Fit all of the data (imode == 1).
     m = t.size
     n = u.shape[1]
@@ -55,7 +46,7 @@ def optdmd(X, t, r, imode, alpha_init=None):
     opts = varpro_opts()
 
     w, e, niter, err, imode, alphas = varpro2(y, t, phi, dphi, m, iss, ia, alpha_init,
-                                              opts)
+                                              opts, verbose=verbose)
     w = w.T
 
     # Normalize
@@ -63,3 +54,45 @@ def optdmd(X, t, r, imode, alpha_init=None):
     w = w.dot(np.diag(1.0 / b))
 
     return w, e, b
+
+
+# if __name__ == '__main':
+#     # Simple example
+#     # set up modes in space
+#     x0 = 0
+#     x1 = 1
+#     nx = 200
+#
+#     # space
+#     xspace = np.linspace(x0, x1, nx)
+#
+#     # modes
+#     f1 = np.sin(xspace)[:, None]
+#     f2 = np.cos(xspace)[:, None]
+#     f3 = np.tanh(xspace)[:, None]
+#
+#     # set up time dynamics
+#     t0 = 0
+#     t1 = 1
+#     nt = 100
+#
+#     ts = np.linspace(t0, t1, nt)[None, :]
+#
+#     # eigenvalues
+#     e1 = 1.0
+#     e2 = -2.0
+#     e3 = 1.0j
+#
+#     evals = np.array([e1, e2, e3])
+#
+#     # create clean dynamics
+#     xclean = f1.dot(np.exp(e1 * ts)) + f2.dot(np.exp(e2 * ts)) + f3.dot(
+#         np.exp(e3 * ts))
+#
+#     # add noise
+#     sigma = 1e-3
+#     xdata = xclean + sigma * np.random.randn(*xclean.shape)
+#
+#     r = 3
+#     imode = 0
+#     w, e, b = optdmd(xdata, ts, r, imode)
