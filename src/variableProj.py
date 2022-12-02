@@ -174,16 +174,6 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
         delta0 = varpro2_solve_special(rjac, lambda0 * np.diag(scalespvt), rhs)
         delta0 = delta0[jpvt - 1]
 
-        # Original matlab code:
-        # When not providing linear constraints, `ifproxfun == 0`.
-        # if (ifproxfun == 1)
-        #     alpha0 = proxfun(alpha + delta0);
-        #     delta0 = alpha0 - alpha; % update
-        #     delta0
-        # else
-        #     alpha0 = alpha + delta0;
-        #
-        # end
         # The sign of delta0 is flipped relative to the matlab code.
         alpha0 = alpha.ravel('F') - delta0.ravel('F')
 
@@ -227,28 +217,6 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
             b = b0
             res = res0
 
-            # # see if smaller lambda is better
-            # lambda1 = lambda0 / lamdown
-            # delta1 = varpro2_solve_special(rjac, lambda1 * np.diag(scalespvt), rhs)
-            # delta1 = delta1[jpvt - 1]
-            #
-            # alpha1 = alpha.ravel() - delta1.ravel()
-            # phimat = phi(alpha1, t)
-            # b1 = backslash(phimat, y)
-            # res1 = y - phimat.dot(b1)
-            # err1 = np.linalg.norm(res1, 'fro') / res_scale
-            #
-            # if err1 < err0:
-            #     lambda0 = copy.copy(lambda1)
-            #     alpha = copy.copy(alpha1)
-            #     errlast = copy.copy(err1)
-            #     b = copy.copy(b1)
-            #     res = copy.copy(res1)
-            # else:
-            #     alpha = copy.copy(alpha0)
-            #     errlast = copy.copy(err0)
-            #     b = copy.copy(b0)
-            #     res = copy.copy(res0)
         else:
             # If the residuals did not improve, increase lambda until something works.
             # This makes the algorithm more like gradient descent
@@ -257,17 +225,18 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                 delta0 = varpro2_solve_special(rjac, lambda0 * np.diag(scalespvt), rhs)
                 delta0 = delta0[jpvt - 1]
 
-                # Original matlab code:
-                # alpha0 = alpha + delta0;
-                # if (ifproxfun == 1)
-                #     alpha0 = proxfun(alpha0);
-                #     delta0 = alpha0 - alpha;
-                # end
                 # The sign of delta0 is flipped relative to the reference matlab code.
-                alpha0 = alpha.ravel() - delta0.ravel()
+                alpha0 = alpha.ravel('F') - delta0.ravel('F')
 
+                # Replacing the original python conversion with a more direct conversion
+                # of the matlab code.
+                # phimat = phi(alpha0, t)
+                # b0 = backslash(phimat, y)
+                # res0 = y - phimat.dot(b0)
                 phimat = phi(alpha0, t)
-                b0 = backslash(phimat, y)
+                # Replaced with the built-in backslash equivalent function.
+                # b0_old = backslash(phimat, y)
+                b0, _, _, _ = np.linalg.lstsq(phimat, y, rcond=None)
                 res0 = y - phimat.dot(b0)
 
                 # err0 = np.linalg.norm(res0, 'fro') / res_scale
@@ -277,11 +246,9 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                 )
 
                 if err0 < errlast:
-                    # print 'HERE' #-- triggered on both
                     break
 
             if err0 < errlast:
-                # print 'HERE'
                 alpha = copy.copy(alpha0)
                 errlast = copy.copy(err0)
                 b = copy.copy(b0)
@@ -295,7 +262,8 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                     'Failed to find appropriate step length at iteration {:}\n'
                     ' Current residual {:}'
                 )
-                print(step_length_error_string.format(itern, errlast))
+                if verbose:
+                    print(step_length_error_string.format(itern, errlast))
                 return b, alpha, niter, err, imode, alphas
 
         alphas[:, itern] = alpha
@@ -318,7 +286,8 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                     'Stall detected: residual reduced by less than {:} \n times '
                     'residual at previous step.'
                     '\niteration: {:}\ncurrent residual: {:.5f}')
-                print(stall_error_string.format(eps_stall, itern, errlast))
+                if verbose:
+                    print(stall_error_string.format(eps_stall, itern, errlast))
                 return b, alpha, niter, err, imode, alphas
 
         phimat = phi(alpha, t)
@@ -335,6 +304,9 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
     niter = maxiter
     imode = 1
     maxiter_tolerance_error_string = (
-        'failed to reach tolerance after maxiter={:} iterations \n current residual {:}'
+        'Failed to reach tolerance after maxiter={:} iterations \n current residual {:}'
     )
-    print(maxiter_tolerance_error_string.format(maxiter, errlast))
+    if verbose:
+        print(maxiter_tolerance_error_string.format(maxiter, errlast))
+    # @ToDo: clean up output
+    return b, alpha, niter, err, imode, alphas

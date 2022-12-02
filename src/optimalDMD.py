@@ -9,9 +9,6 @@ def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
 
     if alpha_init is None:
 
-        # Check for varpro options and use defaults when necessary.
-        # opt = varpro_opts()
-
         # Use the projected trapezoidal rule approximation for the initial guess.
         ux1 = np.dot(u.conj().T, X[:, :-1])
         ux2 = np.dot(u.conj().T, X[:, 1:])
@@ -38,7 +35,7 @@ def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
     iss = X.shape[0]
 
     y = X.T
-    # These statements need cleaning up.
+    # @ToDo: Clean up these statements.
     t = t
     phi = lambda a, t: varpro2expfun(a, t)
     dphi = lambda a, t, i: varpro2dexpfun(a, t, i)
@@ -54,45 +51,3 @@ def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
     w = w.dot(np.diag(1.0 / b))
 
     return w, e, b
-
-
-# if __name__ == '__main':
-#     # Simple example
-#     # set up modes in space
-#     x0 = 0
-#     x1 = 1
-#     nx = 200
-#
-#     # space
-#     xspace = np.linspace(x0, x1, nx)
-#
-#     # modes
-#     f1 = np.sin(xspace)[:, None]
-#     f2 = np.cos(xspace)[:, None]
-#     f3 = np.tanh(xspace)[:, None]
-#
-#     # set up time dynamics
-#     t0 = 0
-#     t1 = 1
-#     nt = 100
-#
-#     ts = np.linspace(t0, t1, nt)[None, :]
-#
-#     # eigenvalues
-#     e1 = 1.0
-#     e2 = -2.0
-#     e3 = 1.0j
-#
-#     evals = np.array([e1, e2, e3])
-#
-#     # create clean dynamics
-#     xclean = f1.dot(np.exp(e1 * ts)) + f2.dot(np.exp(e2 * ts)) + f3.dot(
-#         np.exp(e3 * ts))
-#
-#     # add noise
-#     sigma = 1e-3
-#     xdata = xclean + sigma * np.random.randn(*xclean.shape)
-#
-#     r = 3
-#     imode = 0
-#     w, e, b = optdmd(xdata, ts, r, imode)
