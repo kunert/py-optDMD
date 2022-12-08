@@ -1,6 +1,11 @@
 import numpy as np
-from .variableProj import *
+import os
 import sys
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
+
+import src.variableProj as variableProj
 
 
 def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
@@ -8,7 +13,6 @@ def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
     u, _, _ = np.linalg.svd(X, full_matrices=False)
 
     if alpha_init is None:
-
         # Use the projected trapezoidal rule approximation for the initial guess.
         ux1 = np.dot(u.conj().T, X[:, :-1])
         ux2 = np.dot(u.conj().T, X[:, 1:])
@@ -37,13 +41,13 @@ def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
     y = X.T
     # @ToDo: Clean up these statements.
     t = t
-    phi = lambda a, t: varpro2expfun(a, t)
-    dphi = lambda a, t, i: varpro2dexpfun(a, t, i)
+    phi = lambda a, t: variableProj.varpro2expfun(a, t)
+    dphi = lambda a, t, i: variableProj.varpro2dexpfun(a, t, i)
     # alpha_init = alpha_init
-    opts = varpro_opts()
+    opts = variableProj.varpro_opts()
 
-    w, e, niter, err, imode, alphas = varpro2(y, t, phi, dphi, m, iss, ia, alpha_init,
-                                              opts, verbose=verbose)
+    w, e, niter, err, imode, alphas = variableProj.varpro2(
+        y, t, phi, dphi, m, iss, ia, alpha_init, opts, verbose=verbose)
     w = w.T
 
     # Normalize
