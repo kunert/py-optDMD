@@ -1,5 +1,5 @@
 import numpy as np
-import optimalDMD
+import src.optimalDMD as optimalDMD
 
 
 # Simple example
@@ -34,11 +34,23 @@ evals = np.array([e1, e2, e3])
 xclean = f1.dot(np.exp(e1 * ts)) + f2.dot(np.exp(e2 * ts)) + f3.dot(
     np.exp(e3 * ts))
 
-# add noise
-# sigma = 1e-3
+# The first implementation has no noise to enable a direct comparison
+# between the reference matlab code and the python code.
 sigma = 0
 xdata = xclean + sigma * np.random.randn(*xclean.shape)
 
 r = 3
 imode = 0
 w, e, b = optimalDMD.optdmd(xdata, ts, r, imode)
+
+add_noise = False
+if add_noise:
+    # A second implementation with noise (useful when debugging). Setting an
+    # identical seed and random number sequence between MATLAB and python is
+    # difficult so the exact comparisons are not done.
+    sigma = 1e-3
+    xdata = xclean + sigma * np.random.randn(*xclean.shape)
+
+    r = 3
+    imode = 0
+    w, e, b = optimalDMD.optdmd(xdata, ts, r, imode)
