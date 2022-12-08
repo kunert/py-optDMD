@@ -2,19 +2,15 @@ import numpy as np
 import scipy as sci
 from scipy.sparse import csc_matrix
 import copy
-import warnings
 
 
-warnings.simplefilter("ignore", np.ComplexWarning)
-
-
-# @ToDo: Clean up VisibleDeprecationWarning from creating an ndarray from ragged nested
-#  sequences (which is a list-or-tuple of lists-or-tuples-or ndarrays with different
-#  lengths or shapes) since this is now deprecated in numpy.
 def backslash(A, B):
-    # I initially replaced MATLAB's backslash command with a single call to
-    # np.linalg.lstsq which should be mostly equivalent most of the time. However,
-    # giving the
+    """It is not clear that this function is necessary.
+
+    :param A:
+    :param B:
+    :return:
+    """
     x = []
     for k in range(B.shape[1]):
         b = B[:, k][:, None]
@@ -40,7 +36,7 @@ def varpro2dexpfun(alphaf, tf, i):
     # I believe this segment is where a SparseEfficiencyWarning is raised. It seems
     # reasonable to follow the advice given in the 2nd answer to the stackoverflow
     # question and make this a dense matrix at first before converting to sparse when
-    # passing A out of the function.
+    # passing `A` out of the function.
     #
     # stackoverflow.com/questions/33091397/sparse-efficiency-warning-while-changing
     # -the-column
@@ -52,7 +48,7 @@ def varpro2dexpfun(alphaf, tf, i):
 
     # @ToDo: fix inconsistent matrix sizes.
     # The dense implementation revealed that the matrix sizes were inconsistent. But,
-    # since the csc_matrix sparse type appears to be (too) flexible in this regard.
+    # the csc_matrix sparse type appears to be (too) flexible in this regard.
     # A = np.zeros((m, n), dtype=complex)
     # ttemp = np.reshape(t, (m, 1))
     # A[:, i] = (ttemp * np.exp(alpha[i] * ttemp)).squeeze()
@@ -80,6 +76,7 @@ def varpro2_solve_special(R, D, b):
 
 
 def checkinputrange(xname, xval, xmin, xmax):
+    # @ToDo: This should be a property of the `varpro_opts` class.
     if xval > xmax:
         max_input_string = ('Option {:} with value {:} is greater than {:}, which is '
                             'not recommended.')
@@ -121,6 +118,7 @@ class varpro_opts(object):
 def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
     if opts is None:
         opts = varpro_opts()
+    # @ToDo: Replace the unpacking with a call to the class property.
     lambda0, maxlam, lamup, lamdown, ifmarq, maxiter, tol, eps_stall, iffulljac = opts.unpack()
 
     # initialize values
@@ -147,8 +145,8 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
     b, _, _, _ = np.linalg.lstsq(phimat, y, rcond=None)
 
     res = y - phimat.dot(b)
-    # Note: gamma is all zeros when not using the Tikhonov regularization (not
-    # implemented).
+    # Note: gamma is all zeros when not using the Tikhonov regularization, which is not
+    # implemented.
     errlast = 0.5 * (
             np.linalg.norm(res, 'fro') ** 2
             + np.linalg.norm(np.dot(gamma, alpha), 2) ** 2
@@ -287,7 +285,6 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                 )
                 if verbose:
                     print(step_length_error_string.format(itern, errlast))
-                warnings.resetwarnings()
                 return b, alpha, niter, err, imode, alphas
 
         alphas[:, itern] = alpha
@@ -312,7 +309,6 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                     '\niteration: {:}\ncurrent residual: {:.5f}')
                 if verbose:
                     print(stall_error_string.format(eps_stall, itern, errlast))
-                warnings.resetwarnings()
                 return b, alpha, niter, err, imode, alphas
 
         phimat = phi(alpha, t)
@@ -334,5 +330,4 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
     if verbose:
         print(maxiter_tolerance_error_string.format(maxiter, errlast))
     # @ToDo: clean up output
-    warnings.resetwarnings()
     return b, alpha, niter, err, imode, alphas
