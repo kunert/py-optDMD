@@ -5,9 +5,12 @@ import copy
 
 
 def backslash(A, B):
-    # I initially replaced MATLAB's backslash command with a single call to
-    # np.linalg.lstsq which should be mostly equivalent most of the time. However,
-    # giving the
+    """It is not clear that this function is necessary.
+
+    :param A:
+    :param B:
+    :return:
+    """
     x = []
     for k in range(B.shape[1]):
         b = B[:, k][:, None]
@@ -28,9 +31,28 @@ def varpro2dexpfun(alphaf, tf, i):
     n = alpha.size
     if (i < 0) | (i >= n):
         raise ValueError('varpro2dexpfun: i outside of index range for alpha')
+
+    # @ToDo: Fix sparse matrix cluster and SparseEfficiencyWarning.
+    # I believe this segment is where a SparseEfficiencyWarning is raised. It seems
+    # reasonable to follow the advice given in the 2nd answer to the stackoverflow
+    # question and make this a dense matrix at first before converting to sparse when
+    # passing `A` out of the function.
+    #
+    # stackoverflow.com/questions/33091397/sparse-efficiency-warning-while-changing
+    # -the-column
+
+    # Original python implementation:
     A = csc_matrix((m, n), dtype=complex)
     ttemp = np.reshape(t, (m, 1))
     A[:, i] = ttemp * np.exp(alpha[i] * ttemp)
+
+    # @ToDo: fix inconsistent matrix sizes.
+    # The dense implementation revealed that the matrix sizes were inconsistent. But,
+    # the csc_matrix sparse type appears to be (too) flexible in this regard.
+    # A = np.zeros((m, n), dtype=complex)
+    # ttemp = np.reshape(t, (m, 1))
+    # A[:, i] = (ttemp * np.exp(alpha[i] * ttemp)).squeeze()
+
     return A
 
 
@@ -54,6 +76,7 @@ def varpro2_solve_special(R, D, b):
 
 
 def checkinputrange(xname, xval, xmin, xmax):
+    # @ToDo: This should be a property of the `varpro_opts` class.
     if xval > xmax:
         max_input_string = ('Option {:} with value {:} is greater than {:}, which is '
                             'not recommended.')
@@ -95,6 +118,7 @@ class varpro_opts(object):
 def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
     if opts is None:
         opts = varpro_opts()
+    # @ToDo: Replace the unpacking with a call to the class property.
     lambda0, maxlam, lamup, lamdown, ifmarq, maxiter, tol, eps_stall, iffulljac = opts.unpack()
 
     # initialize values
@@ -118,14 +142,11 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
     S = S[:irank, :irank]
     V = V[:, :irank].T
 
-    # b_old = backslash(phimat, y)
     b, _, _, _ = np.linalg.lstsq(phimat, y, rcond=None)
 
     res = y - phimat.dot(b)
-    # This expression differs from the original matlab code.
-    # errlast = np.linalg.norm(res, 'fro') / res_scale
-    # Gamma is a zeros matrix when not using the Tikhonov regularization so errlast
-    # should just be this expression.
+    # Note: gamma is all zeros when not using the Tikhonov regularization, which is not
+    # implemented.
     errlast = 0.5 * (
             np.linalg.norm(res, 'fro') ** 2
             + np.linalg.norm(np.dot(gamma, alpha), 2) ** 2
@@ -136,6 +157,8 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
         # Build Jacobian matrix, looping over alpha indices.
         for j in range(ia):
             dphitemp = dphi(alpha, t, j).astype(complex)
+            # The matrix sizes are inconsistent here but are saved by something going
+            # on in the sparse matrix data type being used.
             djaca = (dphitemp - csc_matrix(U * csc_matrix(U.T.conj() * dphitemp))).dot(b)
             if iffulljac == 1:
                 # Use the full expression for the Jacobian.
@@ -148,17 +171,21 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                 scales[j] = np.minimum(np.linalg.norm(djacmat[:, j]), 1.0)
                 scales[j] = np.maximum(scales[j], 1.0e-6)
 
-        # loop to determine lambda (lambda gives the levenberg part)
-        # pre-compute components which don't depend on step-size (lambda)
-        # get pivots and lapack-style qr for Jacobian matrix
+        # Determine lambda using a loop (lambda gives the levenberg part). Pre-compute
+        # components which don't depend on step-size (lambda) and get pivots and
+        # lapack-style qr for Jacobian matrix.
+        # Note: Intermediate terms do not correspond to the matlab equivalents but
+        # yield identical results at the end of this segment.
 
-        # rhstemp[:m * iss] = res
         rhstemp = res.ravel('F')
-
-        # This whole section is a mess. Intermediate terms do not correspond to the
-        # matlab equivalents.
         _, _, _, work, _ = sci.linalg.lapack.zgeqp3(djacmat)
+
+        # @ToDo: Figure out how to handle the ComplexWarning.
+        # The following lines appear raise an erroneous ComplexWarning (i.e., warning
+        # when assigning to arbitrary new variables but all variables have types that
+        # match the expected output).
         djacout, jpvt, tau, _, _ = sci.linalg.lapack.zgeqp3(djacmat, work)
+
         rjac = np.triu(djacout)
         lwork = \
         sci.linalg.lapack.zunmqr('L', 'C', djacout, tau, res.ravel(order='F')[:, None],
@@ -166,7 +193,6 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
         rhstop = \
         sci.linalg.lapack.zunmqr('L', 'C', djacout, tau, res.ravel(order='F')[:, None],
                                  lwork)[0]
-
         scalespvt = scales[jpvt - 1]
         rhs = np.concatenate((rhstop, np.zeros((ia, 1)).astype(complex)), 0)
 
@@ -182,18 +208,16 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
         # b0_old = backslash(phimat, y)
         b0, _, _, _ = np.linalg.lstsq(phimat, y, rcond=None)
         res0 = y - phimat.dot(b0)
-        # Return to using the original matlab code expression.
-        # The below commented expression is from the original python conversion.
+        # Return to using the reference matlab expression instead of the expression from
+        # the original python conversion (below).
         # err0 = np.linalg.norm(res0, 'fro') / res_scale
         err0 = 0.5 * (
             np.linalg.norm(res0, 'fro') ** 2
             + np.linalg.norm(np.dot(gamma, alpha0), 2) ** 2
         )
 
-        # Original matlab code:
-        # act_impr = errlast - err0;
-        # pred_impr = real(0.5 * delta0'*(g));
-        # impr_rat = act_impr / pred_impr;
+        # Determine the new step size based on the ratio of expected to actual
+        # improvement.
         g = np.dot(djacmat.conj().T, rhstemp)
         actual_improvement = errlast - err0
         predicted_improvement = np.real(0.5 * np.dot(delta0.conj().T, g))
@@ -201,15 +225,8 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
 
         # If the residuals improved, update the values.
         if err0 < errlast:
-            # New version: rescale lambda based on actual vs predicted improvement
-
-            # Original matlab code
-            # lambda0 = lambda0 * max(1.0 / 3.0, 1 - (2 * impr_rat - 1) ^ 3);
-            # alpha = alpha0;
-            # errlast = err0;
-            # b = b0;
-            # res = res0;
-            lambda0 = lambda0 * np.max(
+            # Rescale lambda based on actual vs predicted improvement
+            lambda0 = lambda0 * max(
                 [1.0 / 3.0, 1 - (2 * improvement_ratio - 1) ** 3]
             )
             alpha = alpha0
@@ -229,16 +246,18 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                 alpha0 = alpha.ravel('F') - delta0.ravel('F')
 
                 # Replacing the original python conversion with a more direct conversion
-                # of the matlab code.
+                # of the matlab code. The original python conversion is below for
+                # reference.
                 # phimat = phi(alpha0, t)
                 # b0 = backslash(phimat, y)
                 # res0 = y - phimat.dot(b0)
-                phimat = phi(alpha0, t)
                 # Replaced with the built-in backslash equivalent function.
-                # b0_old = backslash(phimat, y)
+                phimat = phi(alpha0, t)
                 b0, _, _, _ = np.linalg.lstsq(phimat, y, rcond=None)
                 res0 = y - phimat.dot(b0)
 
+                # As above, use a direct expression from the reference matlab instead
+                # of the expression from the original python conversion (below).
                 # err0 = np.linalg.norm(res0, 'fro') / res_scale
                 err0 = 0.5 * (
                         np.linalg.norm(res0, 'fro') ** 2
@@ -249,12 +268,14 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                     break
 
             if err0 < errlast:
+                # The residual improved so save and move to the next iteration.
                 alpha = copy.copy(alpha0)
                 errlast = copy.copy(err0)
                 b = copy.copy(b0)
                 res = copy.copy(res0)
             else:
-                # No appropriate step length was found.
+                # No appropriate step length was found. Exit and return the current
+                # values.
                 niter = itern
                 err[itern] = errlast
                 imode = 4
@@ -300,7 +321,7 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
         S = S[:irank, :irank]
         V = V[:, :irank].T
         
-    # Iterations failed to meet tolerance in maxiter number of steps.
+    # Iterations failed to meet tolerance in `maxiter` number of steps.
     niter = maxiter
     imode = 1
     maxiter_tolerance_error_string = (
