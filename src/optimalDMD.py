@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 import src.variableProj as variableProj
 
 
-def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
+def optdmd(X, t, r, imode, alpha_init=None, verbose=False, opts=None):
     # Pre-compute U.
     u, _, _ = np.linalg.svd(X, full_matrices=False)
 
@@ -43,15 +43,17 @@ def optdmd(X, t, r, imode, alpha_init=None, verbose=False):
     t = t
     phi = lambda a, t: variableProj.varpro2expfun(a, t)
     dphi = lambda a, t, i: variableProj.varpro2dexpfun(a, t, i)
-    # alpha_init = alpha_init
-    opts = variableProj.varpro_opts()
 
-    w, e, niter, err, imode, alphas = variableProj.varpro2(
+    if opts is None:
+        opts = variableProj.varpro_opts()
+
+    w, e, niter, err, exit_mode, alphas = variableProj.varpro2(
         y, t, phi, dphi, m, iss, ia, alpha_init, opts, verbose=verbose)
+
     w = w.T
 
     # Normalize
     b = np.sqrt(np.sum(np.absolute(w) ** 2.0, 0)).T
     w = w.dot(np.diag(1.0 / b))
 
-    return w, e, b
+    return w, e, b, exit_mode

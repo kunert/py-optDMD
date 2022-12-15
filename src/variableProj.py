@@ -115,6 +115,11 @@ class varpro_opts(object):
         return self.lambda0, self.maxlam, self.lamup, self.lamdown, self.ifmarq, self.maxiter, self.tol, self.eps_stall, self.iffulljac
 
 
+class variableProjExit(object):
+    def __init__(self, exit_state, lambda_solver):
+        self.exit_state = exit_state
+        self.lambda_solver = lambda_solver
+
 def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
     if opts is None:
         opts = varpro_opts()
@@ -234,9 +239,17 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
             b = b0
             res = res0
 
+            lambda_solver = 'predicted'
+            if verbose:
+                print('Used predicted improvement in lambda')
+
         else:
             # If the residuals did not improve, increase lambda until something works.
             # This makes the algorithm more like gradient descent
+            lambda_solver = 'gradient'
+            if verbose:
+                print('Used gradient descent in lambda')
+
             for j in range(maxlam):
                 lambda0 = lambda0 * lamup
                 delta0 = varpro2_solve_special(rjac, lambda0 * np.diag(scalespvt), rhs)
@@ -273,43 +286,49 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
                 errlast = copy.copy(err0)
                 b = copy.copy(b0)
                 res = copy.copy(res0)
+
             else:
                 # No appropriate step length was found. Exit and return the current
                 # values.
                 niter = itern
                 err[itern] = errlast
-                imode = 4
+                exit_mode = variableProjExit('step length failure', lambda_solver)
                 step_length_error_string = (
                     'Failed to find appropriate step length at iteration {:}\n'
                     ' Current residual {:}'
                 )
                 if verbose:
                     print(step_length_error_string.format(itern, errlast))
-                return b, alpha, niter, err, imode, alphas
+
+                return b, alpha, niter, err, exit_mode, alphas
 
         alphas[:, itern] = alpha
         err[itern] = errlast
 
         if verbose:
             print('step {} err {} lambda {}'.format(itern, errlast, lambda0))
+            np.set_printoptions(precision=3)
+            print('eigenvalues: ')
+            print(alpha)
 
         # The tolerance was met and the results are passed back out.
         if errlast < tol:
             niter = itern
-            return b, alpha, niter, err, imode, alphas
+            exit_mode = variableProjExit('tolerance met', lambda_solver)
+            return b, alpha, niter, err, exit_mode, alphas
 
         # Error handling for not converging.
         if itern > 0:
             if err[itern - 1] - err[itern] < eps_stall * err[itern - 1]:
                 niter = itern
-                imode = 8
+                exit_mode = variableProjExit('stall', lambda_solver)
                 stall_error_string = (
                     'Stall detected: residual reduced by less than {:} \n times '
                     'residual at previous step.'
                     '\niteration: {:}\ncurrent residual: {:.5f}')
                 if verbose:
                     print(stall_error_string.format(eps_stall, itern, errlast))
-                return b, alpha, niter, err, imode, alphas
+                return b, alpha, niter, err, exit_mode, alphas
 
         phimat = phi(alpha, t)
         [U, S, V] = np.linalg.svd(phimat, full_matrices=False)
@@ -323,11 +342,11 @@ def varpro2(y, t, phi, dphi, m, iss, ia, alpha_init, opts=None, verbose=False):
         
     # Iterations failed to meet tolerance in `maxiter` number of steps.
     niter = maxiter
-    imode = 1
+    exit_mode = variableProjExit('maxiter', lambda_solver)
     maxiter_tolerance_error_string = (
         'Failed to reach tolerance after maxiter={:} iterations \n current residual {:}'
     )
     if verbose:
         print(maxiter_tolerance_error_string.format(maxiter, errlast))
     # @ToDo: clean up output
-    return b, alpha, niter, err, imode, alphas
+    return b, alpha, niter, err, exit_mode, alphas
