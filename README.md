@@ -1,24 +1,16 @@
 # pyoptDMD
 
 A Python implementation of the optimized Dynamic Mode Decomposition (optDMD) [original
-MATLAB version by Travis
-Askham]
-(https://github.com/duqbo/optdmd) and the Bagging, Optimized DMD (BOP-DMD) [MATLAB
-version by
-Sashidhar]
-(https://github.com/dsashid/BOP-DMD)
+MATLAB version by Travis Askham](https://github.com/duqbo/optdmd) and the Bagging,  
+Optimized DMD (BOP-DMD) [MATLAB version by Sashidhar](https://github.com/dsashid/BOP-DMD)
 
 Both the optDMD and BOP-DMD were previously only matlab implementations. The focus of this
 repository is the implementation and testing of the python translations.
 
-1) [optDMD](https://github.com/klapo/pyoptDMD/blob/examples/examples/ex_optDMD): 
-   Provides an 
-   optimized framework for solving the DMD regressions that may 
-   come
-   from unevenly spaced time snapshots.
-
-2) [BOP-DMD](https://github.com/klapo/pyoptDMD/blob/examples/examples/ex-BOP-DMD.
-   ipynb) takes advantage of this property and solves the DMD using statistical
+1) [optDMD](https://github.com/klapo/pyoptDMD/blob/main/examples/ex_optDMD.ipynb):Provides an 
+   optimized framework for solving the DMD regressions that may come from unevenly spaced time snapshots.
+2) [BOP-DMD](https://github.com/klapo/pyoptDMD/blob/main/examples/ex-BOP-DMD.ipynb) 
+   takes advantage of this property and solves the DMD using statistical
    bagging (i.e., randomly selected ensembles) for constructing the DMD.
 
 The advantage of the combined BOP-DMD is: (a) the additional ability to provide
@@ -30,17 +22,15 @@ as those commonly found in geophysics, and (c) robustly solving the DMD for nois
 
 The code successfully solves for dmd modes in both the Bagging, Optimized DMD and
 optDMD frameworks. The python code exactly replicates the matlab implementation for 
-the zero noise case. At smaller levels of noise ($\sigma< 0.05$) the two implementations
+the zero noise case. At smaller levels of noise (sigma< 0.05) the two implementations
 agree.
 
 For larger levels of noise [a bug became apparent](#solution-bug-for-very-noisy-data) 
 in both the MATLAB and python versions. A simple workaround is provided for the BOP-DMD.
 
 The optDMD and the BOP-DMD are both demonstrated using the ["Simple Example" from 
-Sashidhar
-and Kutz (2022)](https://github.com/dsashid/BOP-DMD/blob/main/BOP_DMD_main.m). Here 
-Three spatial modes are fit and each mode has time
-dynamics which are exponential in time.
+Sashidhar and Kutz (2022)](https://github.com/dsashid/BOP-DMD/blob/main/BOP_DMD_main.m). Here 
+Three spatial modes are fit and each mode has time dynamics which are exponential in time.
 
 ## optDMD
 
