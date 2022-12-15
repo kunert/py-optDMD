@@ -1,8 +1,7 @@
 # pyoptDMD
 
 A Python implementation of the optimized Dynamic Mode Decomposition (optDMD) [original
-MATLAB version by Travis Askham](https://github.com/duqbo/optdmd) and the Bagging,  
-Optimized DMD (BOP-DMD) [MATLAB version by Sashidhar](https://github.com/dsashid/BOP-DMD)
+MATLAB version by Travis Askham](https://github.com/duqbo/optdmd) and the Bagging, Optimized DMD (BOP-DMD) [MATLAB version by Sashidhar](https://github.com/dsashid/BOP-DMD).
 
 Both the optDMD and BOP-DMD were previously only matlab implementations. The focus of this
 repository is the implementation and testing of the python translations.
@@ -65,7 +64,7 @@ And for reference here is the MATLAB code for the BOP-DMD with $\sigma$=0.1.
 
 See the `BOP-DMD.debug-noisy-data.ipynb` for exact details.
 
-The optDMD algorith appears to run into problems when using only the predicted change
+The optDMD algorithm appears to run into problems when using only the predicted change
 in lambda, as the largest errors in eigenvalues occur when the code exits
 after reaching the maximum number of iterations using only this strategy. However, when
 the algorithm exits due to a stall or after entering the
