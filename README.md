@@ -87,6 +87,7 @@ that ensemble members exiting with these statuses could be removed.
 
 - Implement the optDMD solution using the projected POD modes.
 - Build an interface for BOP-DMD.
+- Resolve [discrepancies between the MATLAB and python versions](https://github.com/kunert/py-optDMD/issues/1)
 
 # Citations:
 
