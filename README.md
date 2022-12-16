@@ -1,14 +1,16 @@
 # pyoptDMD
 
 A Python implementation of the optimized Dynamic Mode Decomposition (optDMD) [original
-MATLAB version by Travis Askham](https://github.com/duqbo/optdmd) and the Bagging,  
-Optimized DMD (BOP-DMD) [MATLAB version by Sashidhar](https://github.com/dsashid/BOP-DMD)
+MATLAB version by Travis Askham](https://github.com/duqbo/optdmd) and the Bagging,
+Optimized DMD (BOP-DMD) [MATLAB version by Sashidhar](https://github.com/dsashid/BOP-DMD).
 
 Both the optDMD and BOP-DMD were previously only matlab implementations. The focus of this
 repository is the implementation and testing of the python translations.
 
-1) [optDMD](https://github.com/klapo/pyoptDMD/blob/main/examples/ex_optDMD.ipynb):Provides an 
-   optimized framework for solving the DMD regressions that may come from unevenly spaced time snapshots.
+1) [optDMD](https://github.com/klapo/pyoptDMD/blob/main/examples/ex_optDMD.ipynb) 
+   provides an optimized framework for solving the DMD regressions that may come from 
+   unevenly spaced time snapshots. Additionally, the optDMD is less biased than 
+   standard DMD algorithms.
 2) [BOP-DMD](https://github.com/klapo/pyoptDMD/blob/main/examples/ex-BOP-DMD.ipynb) 
    takes advantage of this property and solves the DMD using statistical
    bagging (i.e., randomly selected ensembles) for constructing the DMD.
@@ -22,8 +24,8 @@ as those commonly found in geophysics, and (c) robustly solving the DMD for nois
 
 The code successfully solves for dmd modes in both the Bagging, Optimized DMD and
 optDMD frameworks. The python code exactly replicates the matlab implementation for 
-the zero noise case. At smaller levels of noise (sigma< 0.05) the two implementations
-agree.
+the zero noise case (see tests). At smaller levels of noise (sigma< 0.05) the two 
+implementations agree.
 
 For larger levels of noise [a bug became apparent](#solution-bug-for-very-noisy-data) 
 in both the MATLAB and python versions. A simple workaround is provided for the BOP-DMD.
@@ -81,7 +83,7 @@ is difficult to assess exactly which levels of noise were tested in the manuscri
 These findings are curious, but suggest improvements to the BOP-DMD algorithm. Namely,
 that ensemble members exiting with these statuses could be removed.
 
-# Still To Do:
+# Potential To Dos:
 
 - Implement the optDMD solution using the projected POD modes.
 - Build an interface for BOP-DMD.
