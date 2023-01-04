@@ -68,7 +68,7 @@ And for reference here is the MATLAB code for the BOP-DMD with $\sigma$=0.1.
 
 See the `BOP-DMD.debug-noisy-data.ipynb` for exact details.
 
-The optDMD algorith appears to run into problems when using only the predicted change
+The optDMD algorithm appears to run into problems when using only the predicted change
 in lambda, as the largest errors in eigenvalues occur when the code exits
 after reaching the maximum number of iterations using only this strategy. However, when
 the algorithm exits due to a stall or after entering the
@@ -88,6 +88,7 @@ that ensemble members exiting with these statuses could be removed.
 
 - Implement the optDMD solution using the projected POD modes.
 - Build an interface for BOP-DMD.
+- Resolve [discrepancies between the MATLAB and python versions](https://github.com/kunert/py-optDMD/issues/1)
 
 # Citations:
 
