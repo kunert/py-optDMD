@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import warnings
-from src import optimalDMD
+from pyoptdmd import optimalDMD
 
 
 class optdmdTestCase(unittest.TestCase):
