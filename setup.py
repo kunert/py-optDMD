@@ -10,15 +10,14 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 setup(
     name='pyoptDMD',
     version='0.1',
-    packages=['src', 'tests'],
+    # packages=['src', 'tests'],
     url='https://github.com/klapo/pyoptDMD',
     license='MIT License',
     author='Karl Lapo,  James Kunert-Graf, Travis Askham',
     author_email='karl-eric.lapo@uibk.ac.at',
     description='Python implementation of the optimized variable projection dynamic '
                 'mode decomposition method. ',
-    packages = find_packages('src'),
-    package_dir = {'': 'src'},
+    package_dir={'': 'src'},
     long_description=long_description,
     python_requires='>=3.8',
     install_requires=[

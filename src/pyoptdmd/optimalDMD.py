@@ -5,7 +5,7 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-import src.variableProj as variableProj
+import pyoptdmd.variableProj as variableProj
 
 
 def optdmd(X, t, r, imode, alpha_init=None, verbose=False, opts=None):
