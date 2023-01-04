@@ -53,7 +53,8 @@ very noisy data.
 
 ### BOP-DMD with sigma=0.1 from python code
 
-See the `ex-BOP-DMD.ipynb` notebook for implementation details.
+See the `ex-BOP-DMD.ipynb` notebook for implementation details. Note that the 
+example notebook uses packages not strictly required by the package.
 
 ![BOP-DMD with sigma=0.1 from python code](examples/python_BOP-DMD.sigma=0.1.png)
 
