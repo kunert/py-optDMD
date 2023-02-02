@@ -49,7 +49,8 @@ def match_vectors(vector1, vector2):
     return np.array(row_indices), np.array(col_indices)
 
 
-def fit(xdata, ts, modes, num_ensembles=10, ensemble_size=None, verbose=False, seed=None):
+def fit(xdata, ts, modes, num_ensembles=10, ensemble_size=None, verbose=False,
+        seed=None, long_term_mean=None, long_term_ts=None, ensemble_pruning=True):
     """
 
     Warnings: currently only works on 2D data with a spatial dimension and a time
@@ -78,7 +79,13 @@ def fit(xdata, ts, modes, num_ensembles=10, ensemble_size=None, verbose=False, s
     # phi_DMD, lam_DMD, b_DMD, sig_DMD = DMD(xdata(:,1:end-1), xdata(:,2:end), 3);
 
     # Try the optdmd without bagging to get an initial guess.
-    w_opt, e_opt, b_opt, _ = optimalDMD.optdmd(xdata, ts, modes, 1)
+    # Extend the data using an assumption about the long term behavior.
+    if long_term_ts is not None and long_term_mean is not None:
+        xdata_ext = np.append(xdata, long_term_mean, axis=1)
+        ts_ext = np.append(ts, long_term_ts, axis=1)
+        w_opt, e_opt, b_opt, _ = optimalDMD.optdmd(xdata_ext, ts_ext, modes, 1)
+    else:
+        w_opt, e_opt, b_opt, _ = optimalDMD.optdmd(xdata, ts, modes, 1)
 
     linear_algebra_error_counter = 0
     j = 0
@@ -94,6 +101,11 @@ def fit(xdata, ts, modes, num_ensembles=10, ensemble_size=None, verbose=False, s
         xdata_cycle = xdata[:, ind]
         ts_ind = ts[:, ind]
 
+        # Extend the data using an assumption about the long term behavior.
+        if long_term_ts is not None and long_term_mean is not None:
+            xdata_cycle = np.append(xdata_cycle, long_term_mean, axis=1)
+            ts_ind = np.append(ts_ind, long_term_ts, axis=1)
+
         # For very high levels of noise the linear least squares svd solver
         # can fail. Catch those and pass on to the next ensemble member.
         try:
@@ -108,13 +120,20 @@ def fit(xdata, ts, modes, num_ensembles=10, ensemble_size=None, verbose=False, s
             # ordering.
             _, indices = match_vectors(e_cycle, e_opt)
 
-            # if exit_mode.lambda_solver == 'predicted' and exit_mode.exit_state == 'maxiter':
-            #     continue
-            # else:
-            # Assign to the outer container using the correct ordering.
-            e_ensembleDMD[:, j] = e_cycle[indices].flatten()
-            w_ensembleDMD[:, :, j] = w_cycle[:, indices]
-            b_ensembleDMD[:, j] = b_cycle[indices].flatten()
+            if exit_mode.lambda_solver == 'predicted' and exit_mode.exit_state == \
+                    'maxiter' and ensemble_pruning:
+                # continue
+                # e_ensembleDMD[:, j] = np.ones_like(e_cycle[indices].flatten()) * np.nan
+                # w_ensembleDMD[:, :, j] = np.ones_like(w_cycle[:, indices]) * np.nan
+                # b_ensembleDMD[:, j] = np.ones_like(b_cycle[indices].flatten()) * np.nan
+                e_ensembleDMD[:, j] = np.complex(np.nan)
+                w_ensembleDMD[:, :, j] = np.complex(np.nan)
+                b_ensembleDMD[:, j] = np.complex(np.nan)
+            else:
+                # Assign to the outer container using the correct ordering.
+                e_ensembleDMD[:, j] = e_cycle[indices].flatten()
+                w_ensembleDMD[:, :, j] = w_cycle[:, indices]
+                b_ensembleDMD[:, j] = b_cycle[indices].flatten()
             j += 1
 
         except np.linalg.LinAlgError:
@@ -124,6 +143,13 @@ def fit(xdata, ts, modes, num_ensembles=10, ensemble_size=None, verbose=False, s
             raise ValueError('Excessive failures in BOP-DMD solutions.')
 
     return e_ensembleDMD, w_ensembleDMD, b_ensembleDMD
+
+
+def predict(e, w, b, ts):
+    # Reconstruct the data for the requested times.
+    x_predict = np.dot(np.dot(w, np.diag(b)), np.exp(np.dot(e[:, np.newaxis], ts)))
+
+    return x_predict
 
 
 if __name__ == "__main__":
